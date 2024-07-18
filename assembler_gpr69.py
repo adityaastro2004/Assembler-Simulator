@@ -1,179 +1,559 @@
-registers = ['000', '001', '010', '011', '100', '101', '110', '111']
-reg = 'R'
-reg_name = ['R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'flag']
-opcode_info = {'add': ['0000000', 'A'],    'sub': ['0000100', 'A'],    'mul': ['0011000', 'A'],    'xor': ['0101000', 'A'],    'or': ['0101100', 'A'],    'and': ['0110000', 'A'],    'mov': ['000100', 'B'],    'rs': ['010000', 'B'],    'ls': ['010010', 'B'],    'div': ['0011100000', 'C'],    'not': ['0110100000', 'C'],    'cmp': ['0111000000', 'C'],    'ld': ['001000', 'D'],    'st': ['001010', 'D'],    'jmp': ['011110000', 'E'],    'jlt': ['111000000', 'E'],    'jgt': ['111010000', 'E'],    'je': ['111110000', 'E'],    'hlt': ['1101000000000000', 'F'] }
+"""                            ASUMPTIONS:
+  label type instruction: only 1 label declaration per line i.e, ":"occurs only once.
 
-b_inst = ['jmp', 'jlt', 'jgt', 'je']
-f = open('txt1.txt', 'r')
-stdin_list = f.readlines()
-f.close()
-for i in range(len(stdin_list)):
-    d = stdin_list[i].strip().split()
-    stdin_list[i] = d
+  mov R1 FLAGS is taken to be a valid command since FLAGS doesn't represent a variable but instead represents a valid register name , where
+  MOV can be used with two types of instructions , type1- mov register value , mov reg1 reg2 , hence we have taken to be a valid name
+"""
+import sys
 
-error = 0
-var = 0
-no_of_ops = 0
-n_of_vars = 0
-n_of_labels = 0
-var_list = []
-labels = []
-lbl_name = []
-lbls = []
-d_labels = {}
-binary_list = []
+op_code = {
+    'add': '00000',
+    'sub': '00001',
+    'mov': {'00010', '00011'},  # B,C
+    'ld': '00100',
+    'st': '00101',
+    'mul': '00110',
+    'div': '00111',
+    'rs': '01000',
+    'ls': '01001',
+    'xor': '01010',
+    'or': '01011',
+    'and': '01100',
+    'not': '01101',
+    'cmp': '01110',
+    'jmp': '01111',
+    'jlt': '11100',
+    'jgt': '11101',
+    'je': '11111',
+    'hlt': '11010',
+    'clear': '10011',
+    'incr': '11000',
+    'decr': '10110',
+    'swap': '10101',
+    'set': '10011'
+}
+op_type = {
+    "A": ['add', 'sub', 'mul', 'xor', 'or', 'and'],
+    "B": ['mov', 'rs', 'ls'],
+    "C": ['mov', 'div', 'not', 'cmp', 'swap'],
+    "D": ['ld', 'st'],
+    "E": ['jmp', 'jlt', 'jgt', 'je'],
+    "F": ['hlt'],
+    "G": ['clear', 'incr', 'decr','set'],
+    "H": ['set']
+}
+reg = {
+    'R0': '000',
+    'r0': '000',
+    'R1': '001',
+    'r1': '001',
+    'R2': '010',
+    'r2': '010',
+    'R3': '011',
+    'r3': '011',
+    'R4': '100',
+    'r4': '100',
+    'R5': '101',
+    'r5': '101',
+    'R6': '110',
+    'r6': '110',
+    'FLAGS': '111'
+}
 
-for k in range(len(stdin_list)):
-    for l in range(len(stdin_list[k])):
-        in_list = list(''.join(stdin_list[k][l]))
-        if 'var' == stdin_list[k][l]:
-            var += 1
-        if ':' in in_list:
-            i_l = in_list.index(':')
-            lbl_name.append(''.join(in_list[0:i_l + 1]))
-            lbls.append(''.join(in_list[0:i_l]))
-            d_labels.update({''.join(in_list[0:i_l]): k-var})
+
+def error_lno2(lno):
+    for i in range(len(empty_lines)):
+        if empty_lines[i] == all_instructions[lno]:
+            return i + 1
+
+
+def error_lno(lno):
+    for i in range(len(all_with_elines)):
+        if all_with_elines[i] == all_instructions[lno]:
+            return i + 1
+
+
+def error_inst(l):
+    for i in range(len(all_with_elines)):
+        if all_with_elines[i][0] == l and all_with_elines[i][1] == False:
+            all_with_elines[i][1] = True
+            return (i + 1)
+
+
+def error_1(lst, lno):
+    lst_str = []
+    for i in lst:
+        i_str = " ".join(i)
+        lst_str.append(i_str)
+    for i in range(len(empty_lines)):
+        if empty_lines[i] == lst_str[lno]:
+            return i + 1
+
+
+def hlt_checker(list, tmp_words):
+    flag = 1
+    tmp_flag = 0
+    for word in tmp_words:
+        word_index = tmp_words.index(word)
+        if "hlt" in word:
+            tmp_flag |= 1
+    if not (tmp_flag):
+        flag = 0
+        error_output.append("Missing hlt instruction.")
     else:
-        no_of_ops += 1
+        if (tmp_words[-1][-1] != "hlt"):
+            flag = 0
+            s = "Error as hlt is not being used as the last instruction.Error in line " + str(
+                word_index + 1)
+            error_output.append(s)
+        for instruction in tmp_words[0:-1]:
+            if instruction[-1] == "hlt":
+                flag = 0
+                s = "ERROR_in_hlt: General syntax error.Error in line " + str(
+                    word_index + 1)
+                error_output.append(s)
+    return flag
 
-no_of_ops = no_of_ops - var
 
-for i in range(len(stdin_list)):
-    binary = ''
-    for j in range(len(stdin_list[i])):
-        operation = stdin_list[i][j]
-        if 'var' == operation:
-            if i < var and 'var' in stdin_list[i]:
-                n_of_vars += 1
-                ind_var = stdin_list[i].index('var')
-                var_list.append(stdin_list[i][ind_var + 1])
-                continue
+def check_imm(n, tmp_ins):
+    if 0 <= int(n) <= 127:
+        return True
+    else:
+        for it in empty_lines:
+            if tmp_ins in it:
+                lab_add = empty_lines.index(it) + 1
+        s = "Illegal immediate value. Error in line" + str(lab_add)
+        error_output.append(s)
+        return False
+
+
+def imm_to_bin(n):
+    return "{0:07b}".format(int(n))
+
+
+def check_labels(list1):
+    empty_lines2 = []
+    flag = 1
+    for word in list1:
+        if word[0] in op_type["E"]:
+            label = word[1]
+            if label not in labels_list:
+                word = " ".join(word)
+                for k in empty_lines:
+                    k = k.strip().split()
+                    k = " ".join(k)
+                    empty_lines2.append(k)
+                indx = empty_lines2.index(word) + 1
+                s = "ERROR: Use of undefined label.Error in line " + str(indx)
+                error_output.append(s)
+                flag = 0
+    return flag
+
+
+def flags():
+    flag = 1
+    for k in range(0, len(inst)):
+        i = inst[k]
+        if "FLAGS" in i:
+            if not (i[0] == "mov" and i[-1] == "FLAGS" and len(i) == 3):
+                flag = 0
+                s = "ERROR: Illegal use of FLAGS register. Error in line " + str(error_inst(i))
+                error_output.append(s)
+    return flag
+
+
+def typos(list):
+    flag = 1
+    countf = 0
+    for words in list:
+        countf += 1
+        flag &= identify_error_type(words)
+    return flag
+
+
+def var_not_dec(inst, var):
+    flag = 1
+    for i, ins in enumerate(inst):
+        if (ins[0] in op_type.get("D")) and (ins[-1] not in var) and len(ins) == 2:
+            s = f"ERROR: variable {ins[-1]} is not declared. Error in line " + str(
+                error_1(inst, i))
+            error_output.append(s)
+            flag = 0
+        """elif ins[0] in op_type.get("E") and ins[-1] not in labels_list:
+          s = f"ERROR: variable {ins[-1]} is not declared. Error in line " + str(
+            error_1(inst, i))
+          error_output.append(s)
+          flag = 0"""
+    return flag
+
+
+def not_defined_at_beginning(list1):
+    flag = 1
+    for i, line in enumerate(list1):
+        if line[0] == "var" and len(line) == 2:
+            if line[-1] in op_code.keys():
+                s = "Opcode cannot be used as variable name. Error in line " + str(
+                    error_1(list1, i))
+                error_output.append(s)
+                flag = 0
+    functions = [line[0] for line in tmp_words]
+    j = 0
+    while functions[j] == 'var':
+        j += 1
+    for i in range(j, len(functions)):
+        if functions[i] == 'var' and len(tmp_words[i]) == 2:
+            s = "ERROR:Variables not declared at the beginning. Error in line " + str(
+                error_inst(tmp_words[i]))
+            error_output.append(s)
+            flag = 0
+    return flag
+
+
+def immediate():
+    flag = 1
+    for line in all_instructions:
+        if "$" in line:
+            k = line.split()
+            imm = k[-1]
+            if imm[1:].isdigit():
+                imm = int(imm[1:])
+                if not check_imm(imm, line):
+                    flag = 0
             else:
-                error += 1
-                print('Error: Variables not declared in the beginning')
-                break
+                s = "Immediate is not a numeric value. Error in line " + str(
+                    error_lno2(all_instructions.index(line)))
+                error_output.append(s)
+                flag = 0
+    return flag
 
-        elif stdin_list[i].index(operation) != 0 and stdin_list[i][stdin_list[i].index(operation) - 1] == 'var':
-            continue
 
-        elif operation in b_inst and stdin_list[i][1] not in lbls:
-            if stdin_list[i][1] in var_list:
-                error += 1
-                print('Error: variable treated as label')
-                break
+def error_type_A(lst):
+    flag = 1
+    if len(lst) == 4:
+        if not (lst[1] in reg.keys()) & (lst[2] in reg.keys()) & (lst[3]
+                                                                  in reg.keys()):
+            s = "ERROR:Typos in register name. Error in line " + str(error_inst(lst))
+            error_output.append(s)
+            flag = 0
+    else:
+        s = "ERROR: General Syntax error. Error in line " + str(error_inst(lst))
+        error_output.append(s)
+        flag = 0
+    return flag
 
-        elif operation in ['ld', 'st'] and (stdin_list[i][2] not in var_list):
-            if stdin_list[i][2] in lbls:
-                error += 1
-                print('Error: label treated as variable')
-                break
-            error += 1
-            print('Error: Undefined variable')
-            break
 
-        elif i >= var and 'var' in stdin_list[i]:
-            error += 1
-            print('Error: Variables not declared in the beginning')
+def error_type_B(lst):
+    flag = 1
+    if len(lst) == 3:
+        if not (lst[1] in reg.keys()):
+            s = "ERROR:Typos in register name. Error in line " + str(error_inst(lst))
+            error_output.append(s)
+            flag = 0
+    else:
+        s = "ERROR: General Syntax error. Error in line " + str(error_inst(lst))
+        error_output.append(s)
+        flag = 0
+    return flag
 
-        elif operation in opcode_info.keys():
-            opcode = opcode_info[operation][0]
-            op_type = opcode_info[operation][1]
 
-            if opcode == '000100' and ('$' not in list("".join(stdin_list[i]))):
-                binary += '0001100000'
-                op_type = 'C'
-            elif operation in b_inst:
-                if stdin_list[i][1] in lbls:
-                    n_of_labels += 1
-                    ind_label = stdin_list[i].index(operation)                              # labels and branch instructions
-                    binary += opcode
-                else:
-                    error += 1
-                    print('Error: Undefined Label')
-                    break
+def error_type_C(lst):
+    flag = 1
+    if len(lst) == 3:
+        if not (lst[1] in reg.keys()) & (lst[2] in reg.keys()):
+            indx = empty_lines.index(" ".join(lst)) + 1
+            s = "ERROR:Typos in register name. Error in line " + str(indx)
+            error_output.append(s)
+            flag = 0
+    else:
+        s = "ERROR: General Syntax error. Error in line " + str(
+            empty_lines.index(" ".join(lst)) + 1)
+        error_output.append(s)
+        flag = 0
+    return flag
 
-            else:
-                binary += opcode
-            continue
 
-        elif operation in lbls:
-            label_value = bin(d_labels[operation])[2:]                                  # add a case for labels
-            if len(label_value) <= 7:                                                   # add extra zeros in binary
-                n_of_zero3 = 7 - len(label_value)
-            else:
-                error += 1
-                print('Error: General syntax error')
-                break
-            binary += n_of_zero3 * '0'
-            binary += str(label_value)
-
-        elif operation in lbl_name:
-            continue
-
-        elif operation in reg_name:
-            ind = reg_name.index(operation)
-            if ind == 7:
-                print('Error: Illegal use of FLAGS register')
-                error += 1
-                break
-            else:
-                binary += registers[ind]
-
-        elif '$' in operation:
-            num = int(operation[1:])  # immediate value
-            bin_num = bin(num)
-            bin_num = bin_num[2:]
-            if len(bin_num) <= 7:  # add extra zeros in binary
-                n_of_zero = 7 - len(bin_num)
-            else:
-                error += 1
-                print('Error: Decimal value more than 127')
-                break
-            binary += n_of_zero * '0'
-            binary += str(bin_num)
-
-        elif operation in var_list:
-            var_value = bin(no_of_ops + var_list.index(operation))[2:]              # variable value allocation
-            if len(var_value) <= 7:                                                 # add extra zeros in binary
-                n_of_zero2 = 7 - len(var_value)
-            else:
-                error += 1
-                print('Error: General Syntax Error')
-                break
-            binary += n_of_zero2 * '0'
-            binary += str(var_value)
+def error_type_D(lst, labl, varl):
+    flag = 1
+    if len(lst) == 3:
+        if lst[1] in reg.keys():
+            if lst[-1] in labl:
+                flag = 0
+                print("ERROR: Use of label as variable.\nError in line ",
+                      error_inst(lst))
+                s = "ERROR: Use of label as variable.\nError in line " + str(
+                    error_inst(lst))
+                error_output.append(s)
+            elif (not (lst[2] in varl)):
+                flag = 0
+                s = "ERROR: only variables can be used as m_add. Error in line " + str(
+                    error_inst(lst))
+                error_output.append(s)
         else:
-            error += 1
-            print('Error: Command/Instruction/Register/Memory not found (Check for Typos)')
-            break
+            flag = 0
+            s = "ERROR: Typos in register name. Error in line " + str(
+                error_inst(lst))
+            error_output.append(s)
+            if lst[-1] + ":" in labl:
+                s = "ERROR: Use of label as variable. Error in line " + str(
+                    error_inst(lst))
+                error_output.append(s)
+    else:
+        s = "ERROR: General Syntax error. Error in line " + str(error_inst(lst))
+        error_output.append(s)
+        flag = 0
+    return flag
 
-    if binary == '':
-        continue
 
-    if len(binary) != 16:
-        error += 1
-        print('Error: General Syntax Error')
-        break
+def error_type_E(lst, varl):
+    flag = 1
+    if len(lst) == 2:
+        if lst[-1] in varl:
+            flag = 0
+            s = "ERROR: Use of variable as label. Error in line " + str(error_inst(lst))
+            error_output.append(s)
+        elif not (lst[-1] in labels_list):
+            flag = 0
+            s = "ERROR: in m_add Error in line " + str(error_inst(lst))
+            error_output.append(s)
+    else:
+        flag = 0
+        s = "ERROR: General Syntax error.Error in line " + str(error_inst(lst))
+        error_output.append(s)
+        if lst[-1] in varl:
+            s = "ERROR: Use of variable as label. Error in line " + str(error_inst(lst))
+    return flag
 
-    if 'hlt' in stdin_list[i] and i < no_of_ops + var - 1:
-        error += 1
-        print("Error: Halt not the last instruction")
 
-    if 'hlt' in stdin_list[i]:
-        binary_list.append('1101000000000000')
-        break
+def identify_error_type(lst):
+    flag = 1
+    if lst[0] in ['mov']:
+        if lst[-1][0] == '$':
+            inst_type.append("b")
+            flag = error_type_B(lst)
+        else:
+            flag = error_type_C(lst)
+            inst_type.append("c")
+    elif lst[0] in op_type.get("A"):
+        inst_type.append("a")
+        flag = error_type_A(lst)
+    elif lst[0] in op_type.get("B"):
+        inst_type.append("b")
+        flag = error_type_B(lst)
+    elif lst[0] in op_type.get("C"):
+        inst_type.append("c")
+        flag = error_type_C(lst)
+    elif lst[0] in op_type.get("D"):
+        inst_type.append("d")
+        flag = error_type_D(lst, labels_list, var)
+    elif lst[0] in op_type.get("E"):
+        inst_type.append("e")
+        flag = error_type_E(lst, var)
+    elif lst[0] in op_type.get("F"):
+        inst_type.append("f")
+    elif lst[0] in op_type.get("G"):
+        inst_type.append("g")
+    elif lst[0] in op_type.get('H'):
+        inst_type.append("h")
+    else:
+        s = "ERROR:Typos in instruction name. Error in line " + str(
+            error_inst(lst))
+        error_output.append(s)
+        flag = 0
+    return flag
 
-    if i == no_of_ops + var -1 and 'hlt' not in stdin_list[i]:
-        error += 1
-        print('Error: Missing halt instruction')
-        break
 
-    if error >= 1:
-        break
+def check_empty():
+    flag = 1
+    if tmp_words == []:
+        flag = 0
+        f = open('output.txt', 'w')
+        f.write("ERROR: File empty.")
+    return flag
+
+
+# checking all errors
+def check_all_errors():
+    flag = 1
+    if check_empty() == 0:
+        flag = 0
+        return flag
+    if var_not_dec(inst, var) != 1:
+        flag = 0
+    if not_defined_at_beginning(tmp_words) != 1:
+        flag = 0
+    if hlt_checker(all_instructions, tmp_words) != 1:
+        flag = 0
+    if immediate() != 1:
+        flag = 0
+    if check_labels(tmp_words) != 1:
+        flag = 0
+    if flags() != 1:
+        flag = 0
+    if typos(inst) != 1:
+        flag = 0
+    return (flag and empty_label and flag_out)
+
+
+# main
+# reading input file.
+# page=""
+# line=""
+
+# while True:
+#   line=sys.stdin.readline().strip()
+#   if not line:
+#     break
+#   page+=line + "\n"
+# page = sys.stdin.read()
+
+f = open('input.txt', 'r')
+page = f.read()
+
+all_instructions = [x.lstrip().rstrip() for x in page.split('\n') if x != ""]
+empty_lines = [x.lstrip().rstrip() for x in page.split('\n')]
+
+all_with_elines, tmp_words, = [], []
+for lin in empty_lines:
+    lin = lin.split()
+    if lin == []:
+        all_with_elines.append([[], False])
+    elif lin[0][-1] == ":":
+        if len(lin) == 1:
+            all_with_elines.append([lin, False])
+        else:
+            all_with_elines.append([lin[1::], False])
+    else:
+        all_with_elines.append([lin, False])
+for line in all_instructions:
+    words = line.split()
+    tmp_words.append(words)
+
+# classification of labels, var dec & instructions.
+inst, inst_type = [], []
+labels_list = []
+var, var_dic = [], {}
+error_output, labels_with_inst = [], []
+labels = {}
+empty_label, flag_out = 1, 1
+for i in range(0, len(tmp_words)):
+    line = tmp_words[i]
+    if line[0] == "var":
+        if len(line) == 2:
+            var.append(line[1])
+        else:
+            pe = "ERROR: General Syntax error. Error in line " + str(error_inst(line))
+            error_output.append(pe)
+            flag_out &= 0
+
+    elif line[0][-1] == ":":
+        labels_list.append(line[0][0:-1])
+        if len(line) == 1:
+            pe = "ERROR: empty label encountered. Error in line " + str(error_inst(line))
+            error_output.append(pe)
+            empty_label = 0
+        else:
+            l = " ".join(line)
+            labels_with_inst.append(l)
+            inst.append(
+                line[1:])  # adding the instruction only not the name in the inst list
+
+    elif (line[0] in op_code.keys() and len(line) < 2
+          and "hlt" not in line) or line[0] not in op_code.keys():
+        pe = "ERROR: General Syntax error. Error in line " + str(error_inst(line))
+        error_output.append(pe)
+        flag_out &= 0
 
     else:
-        binary_list.append(binary)
+        inst.append(line)
 
-if error == 0:
-    for i in range(len(binary_list)):
-        print(binary_list[i])
+
+# functions to print binary of the specific type of instructions
+def type_A(lst):
+    opcode, r1, r2, r3 = lst[0], lst[1], lst[2], lst[3]
+    return op_code.get(opcode) + '00' + reg.get(r1) + reg.get(r2) + reg.get(
+        r3) + '\n'
+
+
+def type_B(lst):
+    opcode, r1, imm = lst[0], lst[1], lst[2]
+    if opcode == 'mov':
+        return '00010' + '0' + reg.get(r1) + imm_to_bin(imm[1:]) + '\n'
+    return op_code.get(opcode) + '0' + reg.get(r1) + imm_to_bin(imm[1:]) + '\n'
+
+
+def type_C(lst):
+    opcode, r1, r2 = lst[0], lst[1], lst[2]
+    if opcode == 'mov':
+        return '00011' + '00000' + reg.get(r1) + reg.get(r2) + '\n'
+    return op_code.get(opcode) + '00000' + reg.get(r1) + reg.get(r2) + '\n'
+
+
+def type_D(lst):
+    opcode, r1, m_add = lst[0], lst[1], str(imm_to_bin(var_dic.get(lst[2])))
+    return op_code.get(opcode) + '0' + reg.get(
+        r1) + m_add + '\n'
+
+
+def type_E(lst):
+    tmp_label = lst[-1] + ":"
+    for i in tmp_words:
+        if tmp_label in i:
+            tmp_label = i[1::]
+    lab_add = inst.index(tmp_label)
+    opcode = lst[0]
+    return op_code.get(opcode) + '0000' + str(imm_to_bin(lab_add)) + '\n'
+
+
+def type_F(lst):
+    opcode = lst[0]
+    return op_code.get(opcode) + '00000000000'
+
+
+def type_G(lst):
+    opcode = lst[0]
+    reg_nam = lst[1]
+    return op_code.get(opcode) + '00000000' + reg.get(reg_nam) + '\n'
+
+
+def print_binary():
+    out = ""
+    for i in range(0, len(inst_type)):
+        type = inst_type[i]
+        if type == "a":
+            out += type_A(inst[i])
+        elif type == "b":
+            out += type_B(inst[i])
+        elif type == "c":
+            out += type_C(inst[i])
+        elif type == "d":
+            out += type_D(inst[i])
+        elif type == "e":
+            out += type_E(inst[i])
+        elif type == "f":
+            out += type_F(inst[i])
+        elif type == "g":
+            out += type_G(inst[i])
+    print(out)
+
+
+def print_errors():
+    out = ""
+    for error in error_output:
+        out += error
+        out += "\n"
+    print(out)
+
+
+var_counter = len(all_instructions) - len(var)
+
+for variable in var:
+    var_dic[variable] = var_counter
+    var_counter = var_counter + 1
+
+if check_empty():
+    # f = open('output.txt', 'w')
+    if check_all_errors() and flag_out:
+        print_binary()
+    else:
+        error_output = sorted(error_output, key=lambda x: x[-2])
+        print_errors()
